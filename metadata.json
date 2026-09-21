@@ -1,0 +1,6 @@
+{
+  "name": "KelolaUang",
+  "description": "Aplikasi web pengelolaan keuangan pribadi yang praktis, intuitif, dan elegan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["PERSONAL_FINANCE_TRACKING", "SUPABASE_AUTHENTICATION"]
+}
