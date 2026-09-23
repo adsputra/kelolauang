@@ -87,21 +87,50 @@ export function safeRedirectPath(value: string | null): string {
 
 /**
  * Pertahanan CSRF untuk request mutasi: wajib berasal dari origin yang sama.
- * Browser modern mengirim `Sec-Fetch-Site`; fallback membandingkan Origin dengan Host.
+ * Browser modern mengirim `Sec-Fetch-Site`; fallback membandingkan Origin atau Referer dengan Host.
+ * Menolak secara default (fail-secure) jika origin maupun referer tidak dapat ditentukan.
  */
 export function isSameOriginRequest(request: Request): boolean {
   const fetchSite = request.headers.get('sec-fetch-site');
   if (fetchSite) return fetchSite === 'same-origin' || fetchSite === 'none';
 
-  const origin = request.headers.get('origin');
-  if (!origin) return true;
-
-  const host = request.headers.get('host');
+  const host = request.headers.get('host') ?? request.headers.get('x-forwarded-host');
   if (!host) return false;
 
-  try {
-    return new URL(origin).host === host;
-  } catch {
-    return false;
+  const origin = request.headers.get('origin');
+  if (origin) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
   }
+
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      return new URL(referer).host === host;
+    } catch {
+      return false;
+    }
+  }
+
+  // Fail-secure: jika sec-fetch-site, origin, dan referer semua tidak ada, tolak request mutasi
+  return false;
+}
+
+/**
+ * Mengekstrak alamat IP klien dari header request (mendukung proxy / load balancer).
+ */
+export function getClientIp(request: Request): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const firstIp = forwardedFor.split(',')[0]?.trim();
+    if (firstIp) return firstIp;
+  }
+
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+
+  return '127.0.0.1';
 }

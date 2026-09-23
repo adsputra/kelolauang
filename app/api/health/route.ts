@@ -3,8 +3,6 @@ export const dynamic = 'force-dynamic';
 interface HealthCheckResult {
   status: 'healthy' | 'degraded';
   timestamp: string;
-  uptimeSeconds: number;
-  environment: string;
   checks: {
     supabaseConfigured: boolean;
     supabaseReachable?: boolean;
@@ -38,8 +36,6 @@ export async function GET(): Promise<Response> {
   const result: HealthCheckResult = {
     status: isHealthy ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime()),
-    environment: process.env.NODE_ENV || 'production',
     checks: {
       supabaseConfigured: hasConfig,
       supabaseReachable,

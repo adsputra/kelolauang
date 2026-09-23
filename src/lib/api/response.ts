@@ -22,6 +22,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   NETWORK_ERROR: 502,
   REQUEST_TIMEOUT: 504,
   PAYLOAD_TOO_LARGE: 413,
+  TOO_MANY_REQUESTS: 429,
 };
 
 export function statusForErrorCode(code: string): number {

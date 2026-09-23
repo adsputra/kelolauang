@@ -9,13 +9,26 @@ import {
   validateRegisterInput,
 } from '../features/auth/authValidation';
 
+function getInitialAuthError(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const authError = params.get('auth_error');
+  if (authError === 'confirmation_failed') {
+    return 'Konfirmasi email gagal atau tautan telah kedaluwarsa. Silakan masuk atau daftar ulang.';
+  }
+  if (authError === 'missing_code') {
+    return 'Tautan konfirmasi tidak valid.';
+  }
+  return null;
+}
+
 export default function AuthPage() {
   const { login, signup } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => getInitialAuthError());
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

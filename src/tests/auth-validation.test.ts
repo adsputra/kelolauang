@@ -28,9 +28,9 @@ test('validasi email menolak format yang salah, kosong, atau bukan string', () =
   assert.equal(validateEmail(123).ok, false);
 });
 
-test('validasi password menolak kata sandi di bawah 6 karakter atau kosong', () => {
+test('validasi password menolak kata sandi di bawah 8 karakter atau kosong', () => {
   assert.equal(validatePassword('').ok, false);
-  assert.equal(validatePassword('12345').ok, false);
+  assert.equal(validatePassword('1234567').ok, false);
   assert.equal(validatePassword(null).ok, false);
 
   const valid = validatePassword('rahasia123');
@@ -61,6 +61,7 @@ test('validateLoginInput memvalidasi email dan password sekaligus', () => {
 
   assert.equal(validateLoginInput('invalid-email', 'password123').ok, false);
   assert.equal(validateLoginInput('user@domain.com', '').ok, false);
+  assert.equal(validateLoginInput('user@domain.com', 'a'.repeat(MAX_PASSWORD_LENGTH + 1)).ok, false);
 });
 
 test('validateRegisterInput memvalidasi nama, email, dan password', () => {
@@ -74,7 +75,7 @@ test('validateRegisterInput memvalidasi nama, email, dan password', () => {
 
   assert.equal(validateRegisterInput('', 'ani@test.id', 'secret123').ok, false);
   assert.equal(validateRegisterInput('Ani', 'notanemail', 'secret123').ok, false);
-  assert.equal(validateRegisterInput('Ani', 'ani@test.id', '123').ok, false);
+  assert.equal(validateRegisterInput('Ani', 'ani@test.id', '1234567').ok, false);
 });
 
 test('validasi menolak nilai yang melewati batas panjang maksimum', () => {

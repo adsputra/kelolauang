@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MAX_JSON_BODY_BYTES,
+  getClientIp,
   isIsoTimestamp,
   isSameOriginRequest,
   isUuid,
@@ -16,6 +17,7 @@ test('statusForErrorCode memetakan kode error ke status HTTP yang tepat', () => 
   assert.equal(statusForErrorCode('NOT_AUTHENTICATED'), 401);
   assert.equal(statusForErrorCode('FORBIDDEN'), 403);
   assert.equal(statusForErrorCode('CSRF_REJECTED'), 403);
+  assert.equal(statusForErrorCode('TOO_MANY_REQUESTS'), 429);
   assert.equal(statusForErrorCode('INVALID_CATEGORY'), 400);
   assert.equal(statusForErrorCode('NOTES_TOO_LONG'), 400);
   assert.equal(statusForErrorCode('EDIT_CONFLICT'), 409);
@@ -41,7 +43,7 @@ test('apiSuccess dan apiError memakai envelope { data, error } yang konsisten', 
   });
 });
 
-test('isSameOriginRequest menolak origin lintas situs dan menerima same-origin', () => {
+test('isSameOriginRequest menolak origin lintas situs dan menerima same-origin secara fail-secure', () => {
   const sameOrigin = new Request('http://localhost:3000/api', {
     headers: { 'sec-fetch-site': 'same-origin' },
   });
@@ -61,6 +63,38 @@ test('isSameOriginRequest menolak origin lintas situs dan menerima same-origin',
     headers: { host: 'localhost:3000', origin: 'https://evil.example' },
   });
   assert.equal(isSameOriginRequest(mismatchedOrigin), false);
+
+  // Fallback ke Referer jika Origin tidak ada
+  const refererOnly = new Request('http://localhost:3000/api', {
+    headers: { host: 'localhost:3000', referer: 'http://localhost:3000/dashboard' },
+  });
+  assert.equal(isSameOriginRequest(refererOnly), true);
+
+  const mismatchedReferer = new Request('http://localhost:3000/api', {
+    headers: { host: 'localhost:3000', referer: 'https://evil.example/attack' },
+  });
+  assert.equal(isSameOriginRequest(mismatchedReferer), false);
+
+  // Fail-secure: jika sec-fetch-site, origin, dan referer semua tidak ada
+  const noOriginNoReferer = new Request('http://localhost:3000/api', {
+    headers: { host: 'localhost:3000' },
+  });
+  assert.equal(isSameOriginRequest(noOriginNoReferer), false);
+});
+
+test('getClientIp mengekstrak IP klien dari header x-forwarded-for atau fallback', () => {
+  const forwarded = new Request('http://localhost/api', {
+    headers: { 'x-forwarded-for': '203.0.113.195, 70.41.3.18' },
+  });
+  assert.equal(getClientIp(forwarded), '203.0.113.195');
+
+  const real = new Request('http://localhost/api', {
+    headers: { 'x-real-ip': '198.51.100.4' },
+  });
+  assert.equal(getClientIp(real), '198.51.100.4');
+
+  const fallback = new Request('http://localhost/api');
+  assert.equal(getClientIp(fallback), '127.0.0.1');
 });
 
 test('isUuid, isIsoTimestamp, parsePageParam, dan safeRedirectPath memvalidasi input', () => {

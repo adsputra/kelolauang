@@ -206,7 +206,11 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     try {
       // Sengaja tidak menyentuh state utama atau pageRef: ekspor CSV bersifat read-only,
       // sehingga transaksi yang diubah pengguna saat proses berjalan tidak tertimpa.
-      while (shouldContinue) {
+      // Dibatasi maksimal 100 halaman (10.000 transaksi) untuk mencegah kehabisan memori di browser.
+      const MAX_EXPORT_PAGES = 100;
+      let pagesFetched = 0;
+
+      while (shouldContinue && pagesFetched < MAX_EXPORT_PAGES) {
         const result = await fetchTransactionsPage(nextPage);
         if (version !== requestVersion.current) return staleSessionFailure();
         if (!result.ok) return result;
@@ -218,6 +222,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         ];
         shouldContinue = result.data.hasMore;
         nextPage += 1;
+        pagesFetched += 1;
       }
 
       if (version === requestVersion.current && overviewFromFallbackRef.current) {

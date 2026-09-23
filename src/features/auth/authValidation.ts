@@ -4,7 +4,7 @@ import { MAX_NAME_LENGTH } from '../finance/validation';
 
 export { MAX_NAME_LENGTH } from '../finance/validation';
 
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 72;
 export const MAX_EMAIL_LENGTH = 254;
 
@@ -62,6 +62,10 @@ export function validateLoginInput(
 
   if (typeof password !== 'string' || !password) {
     return failure('INVALID_PASSWORD', 'Kata sandi wajib diisi.');
+  }
+
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    return failure('INVALID_PASSWORD', `Kata sandi maksimal ${MAX_PASSWORD_LENGTH} karakter.`);
   }
 
   return success({ email: emailResult.data, password });

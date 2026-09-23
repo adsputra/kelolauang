@@ -122,4 +122,14 @@ export const logger = {
       data,
     });
   },
+
+  security(event: string, details?: Record<string, unknown>): void {
+    writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      context: 'securityAudit',
+      message: `[SECURITY] ${event}`,
+      data: details,
+    });
+  },
 };
