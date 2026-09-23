@@ -1,107 +1,56 @@
 # KelolaUang
 
-KelolaUang adalah aplikasi pencatatan keuangan pribadi berbasis Next.js dan Supabase. Fitur utamanya meliputi autentikasi email, pemasukan dan pengeluaran, batas anggaran bulanan, filter laporan, serta ekspor CSV.
+Aplikasi web untuk mencatat dan memantau keuangan pribadi: pemasukan, pengeluaran, batas anggaran bulanan, dan laporan.
 
-## Menjalankan secara lokal
+## Fitur
 
-Prasyarat: Node.js 20 atau lebih baru dan sebuah project Supabase.
+- Catat pemasukan dan pengeluaran lengkap dengan kategori, tanggal, dan catatan.
+- Ringkasan keuangan: total saldo, arus kas 5 bulan terakhir, dan pengeluaran per kategori.
+- Batas anggaran bulanan dengan indikator aman, waspada, dan terlampaui.
+- Laporan: pencarian, filter jenis/kategori/rentang tanggal, dan ekspor CSV.
+- Akun email: daftar, konfirmasi email, masuk/keluar, dan ubah profil.
+- Setiap akun hanya bisa melihat dan mengubah datanya sendiri (Row Level Security).
 
-1. Salin `.env.example` menjadi `.env.local`, lalu isi URL project dan anon key Supabase.
+## Teknologi
+
+Next.js (App Router), React, TypeScript, Tailwind CSS, Supabase (Auth + Postgres), dan Playwright untuk pengujian UI.
+
+## Menjalankan di lokal
+
+Prasyarat: Node.js 20+ dan sebuah project Supabase.
+
+1. Salin `.env.example` menjadi `.env.local`, lalu isi `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 2. Jalankan `npm install`.
-3. Terapkan file migrasi database berikut secara berurutan melalui Supabase CLI atau SQL Editor:
-   - `supabase/migrations/202608240001_harden_finance_schema.sql` (tabel, RLS, constraint, trigger)
-   - `supabase/migrations/202609040001_add_finance_overview.sql` (fungsi RPC get_finance_overview)
-   - `supabase/migrations/202609090001_add_finance_performance_indexes.sql` (indeks performa query & agregasi)
-   - `supabase/migrations/202609210001_add_transaction_idempotency.sql` (idempotency key transaksi)
-4. Jalankan `npm run dev`.
+3. Terapkan semua file di `supabase/migrations/` secara berurutan melalui Supabase CLI atau SQL Editor.
+4. Jalankan `npm run dev`, lalu buka http://localhost:3000.
 
-Jangan gunakan service-role key di browser. Aplikasi ini hanya membutuhkan anon key; akses data dibatasi oleh Row Level Security.
+Aplikasi ini hanya memakai anon key; akses data dibatasi Row Level Security. Jangan pernah menaruh service-role key di aplikasi atau browser.
 
-## Arsitektur autentikasi dan data
+## Konfigurasi Supabase
 
-Sesi autentikasi disimpan sebagai **cookie `httpOnly`, `Secure`, dan `SameSite=Lax`** yang dikelola server melalui `@supabase/ssr`. Token tidak pernah dapat dibaca JavaScript di browser (`localStorage` tidak lagi digunakan).
+Di dashboard Supabase:
 
-- `proxy.ts` menyegarkan token kedaluwarsa di latar belakang pada setiap request.
-- Semua mutasi auth ditangani server: `POST /api/auth/{login,signup,logout}`, `PATCH /api/auth/profile`, dan callback konfirmasi email di `GET /api/auth/callback`.
-- Seluruh akses data keuangan melewati route handler internal (`/api/finance/*`) yang memvalidasi sesi dan input di server, lalu memanggil Supabase dengan cookie sesi; browser tidak lagi memanggil PostgREST secara langsung.
-- Setiap route memakai envelope response konsisten `{ data, error }`, memvalidasi payload, dan menolak request mutasi lintas origin (CSRF).
+- Aktifkan login email dan konfirmasi email.
+- Daftarkan `https://<domain-anda>/api/auth/callback` di **Authentication → URL Configuration → Redirect URLs** agar link konfirmasi kembali ke aplikasi.
+- Untuk produksi, gunakan SMTP kustom karena email bawaan Supabase memiliki batas pengiriman.
 
-## Pemeriksaan kualitas
+## Perintah
 
-```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
-```
+| Perintah | Fungsi |
+| --- | --- |
+| `npm run dev` | Menjalankan aplikasi |
+| `npm run build` / `npm start` | Build dan menjalankan versi produksi |
+| `npm run check` | Lint, typecheck, unit test, dan build |
+| `npm test` | Unit test |
+| `npm run test:integration` | Uji isolasi data antar-akun (butuh Supabase staging) |
+| `npm run test:e2e` | Uji alur UI dengan Playwright |
 
-Atau jalankan seluruh pemeriksaan dengan `npm run check`.
+Untuk test integration/e2e, siapkan `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON_KEY`, dan `SUPABASE_TEST_SERVICE_ROLE_KEY` dari project staging — jangan arahkan ke production.
 
-## Kesiapan produksi
+## Deploy
 
-Kontrol yang sudah diterapkan di kode:
+1. Set `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` di hosting (mis. Vercel).
+2. Terapkan semua migrasi ke project Supabase target.
+3. Pastikan `GET /api/health` mengembalikan 200 setelah deploy.
 
-- **Sesi aman**: cookie `httpOnly` + `Secure` + `SameSite=Lax`, token tidak tersimpan di `localStorage`, CSRF guard pada semua endpoint mutasi, dan proxy penyegar sesi.
-- **Keamanan data**: Row Level Security + `FORCE RLS` dengan policy kepemilikan `auth.uid()` pada semua tabel; setiap endpoint memverifikasi sesi dan kepemilikan resource di server; integration test membuktikan isolasi profil, transaksi, RPC, dan reset antar-akun.
-- **Validasi berlapis**: validasi di klien, ulang di route handler (`src/features/*/validation.ts`), dan constraint database (tipe, nominal, tanggal, kategori, panjang catatan) sebagai pertahanan ganda. Body JSON dibatasi 64 KB (`PAYLOAD_TOO_LARGE`, HTTP 413).
-- **Integritas data**: kunci optimistik `updated_at` pada update/hapus transaksi dan profil untuk mencegah lost update; idempotency key (`Idempotency-Key`, unik per pengguna) mencegah transaksi ganda saat pengiriman ulang setelah timeout; semua agregasi dihitung di database melalui RPC.
-- **Skalabilitas**: pagination 100 transaksi per halaman, indeks komposit untuk filter dan agregasi, ekspor CSV memuat seluruh halaman tanpa menimpa state yang sedang berubah.
-- **Reliabilitas**: timeout 20 detik untuk seluruh request Supabase di server (`src/lib/supabase/fetch.ts`) dan timeout 25 detik untuk request browser (`src/lib/api/client.ts`), error boundary, banner kegagalan non-fatal dengan opsi coba lagi, fallback ringkasan bila RPC belum terpasang, dan logging terstruktur dengan redaksi field sensitif.
-- **Header keamanan**: CSP ketat (`connect-src 'self'`), HSTS, X-Frame-Options, nosniff, COOP/CORP, dan Permissions-Policy diatur di `next.config.ts`.
-- **Observabilitas**: `GET /api/health` memverifikasi koneksi Supabase (200 sehat, 503 degraded) dengan `Cache-Control: no-store`.
-
-Checklist sebelum deploy:
-
-1. Set `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` pada environment hosting (jangan gunakan service-role key di aplikasi).
-2. Terapkan seluruh migrasi `supabase/migrations/*.sql` secara berurutan ke project Supabase target.
-3. Di dashboard Supabase: aktifkan konfirmasi email, atur panjang minimum kata sandi, aktifkan rate limit endpoint auth, dan daftarkan `https://<domain-anda>/api/auth/callback` pada Redirect URLs.
-4. Jalankan `npm run test:integration` dan `npm run test:e2e` terhadap project staging (lihat bagian berikut). Jangan menjalankan test destruktif terhadap production.
-5. Setelah deploy, pastikan `GET /api/health` mengembalikan 200 dan pasang monitoring uptime pada endpoint tersebut.
-6. Jalankan `npm audit` secara berkala dan perbarui dependency yang memiliki kerentanan.
-
-## CI
-
-`.github/workflows/ci.yml` menjalankan `npm ci`, `npm run check` (lint, typecheck, unit test, build produksi), dan `npm audit --omit=dev` pada setiap push ke `main` dan pull request. Job ini tidak membutuhkan kredensial Supabase.
-
-## Sisa pekerjaan opsional
-
-- **Rate limiting tambahan di sisi aplikasi.** Saat ini mengandalkan rate limit bawaan Supabase GoTrue; reverse proxy/CDN dapat menambah pembatasan per-IP.
-
-## Integration test Supabase staging
-
-Gunakan project Supabase staging khusus test, lalu sediakan tiga environment variable server-only:
-
-```bash
-SUPABASE_TEST_URL=...
-SUPABASE_TEST_ANON_KEY=...
-SUPABASE_TEST_SERVICE_ROLE_KEY=...
-npm run test:integration
-```
-
-Jangan memberi prefix `NEXT_PUBLIC_` pada service-role key dan jangan menjalankan test ini terhadap production. Test membuat dua akun sementara, membuktikan isolasi profil/transaksi/RPC/reset, kemudian menghapus akun tersebut melalui Admin API.
-
-Setelah build produksi tersedia dan browser Chromium Playwright sudah terpasang, jalankan alur UI lengkap:
-
-```bash
-npm run build
-npm run test:e2e
-```
-
-Secara default test menyalakan `next start` pada port 3002. Untuk menguji deployment staging yang sudah berjalan, isi `E2E_BASE_URL` dengan URL staging. Project Supabase yang digunakan aplikasi harus sama dengan `SUPABASE_TEST_URL`.
-
-## Struktur utama
-
-- `proxy.ts`: penyegaran sesi Supabase di latar belakang (cookie httpOnly).
-- `app/api/auth`: route handler login, signup, logout, sesi, profil, dan callback konfirmasi email.
-- `app/api/finance`: route handler data keuangan (profil, ringkasan, transaksi, reset).
-- `src/server`: service autentikasi dan repository data sisi server (dipakai route handler).
-- `src/lib/api`: envelope response, guard CSRF/validasi request, dan pemanggil API dari browser.
-- `src/lib/supabase/server.ts`: pembuat klien Supabase per request dengan cookie httpOnly.
-- `src/lib/supabase/fetch.ts`: pembungkus fetch dengan timeout 20 detik untuk seluruh request Supabase di server.
-- `src/shared/fetch.ts`: helper timeout dan penggabungan AbortSignal (dipakai server dan browser).
-- `src/features/auth`: state sesi dan pemanggil endpoint autentikasi.
-- `src/features/finance`: domain, validasi, kategori, repository, dan state data keuangan.
-- `src/features/reports`: transformasi dan ekspor CSV.
-- `src/features/ui`: state presentasi dan navigasi.
-- `src/components`: komponen UI yang dipakai lintas fitur.
-- `supabase/migrations`: constraint, RLS, trigger, dan RPC database.
+CI di `.github/workflows/ci.yml` menjalankan `npm run check` dan `npm audit` pada setiap push dan pull request.
